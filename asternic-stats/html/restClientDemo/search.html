@@ -1,0 +1,117 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Rest Search Sample</title>
+ 
+<link rel="stylesheet" type="text/css" media="screen" href="css/jquery-ui-1.8.16.custom.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="css/ui.jqgrid.css" />
+
+<style type="text/css">
+.alternate { background: #ddd; }
+</style>
+ 
+<script src="js/jquery-1.4.2.min.js" type="text/javascript"></script>
+<script src="js/jquery-ui-1.8.5.custom.min.js" type="text/javascript"></script>
+<script src="js/i18n/grid.locale-en.js" type="text/javascript"></script>
+<script src="js/jquery.jqGrid.min.js" type="text/javascript"></script>
+<script src="js/jquery.base64.min.js" type="text/javascript"></script>
+<script src="js/sprintf.js" type="text/javascript"></script>
+<script>
+function make_base_auth(user, pass) {
+  var tok = user + ':' + pass;
+  var hash = $.base64.encode(tok);
+  return "Basic " + hash;
+}
+
+var credentials = make_base_auth('admin','admin'); 
+
+var loca = window.location+'';
+var locpart = loca.split('/');
+locpart.pop();
+locpart.pop();
+var restPath = locpart.join('/') + '/rest';
+
+jQuery(document).ready(function(){
+
+datePick = function(elem)
+{
+   jQuery(elem).datepicker({ dateFormat: 'yy-mm-dd' });
+}
+
+var tbl = jQuery("#list2");
+
+jQuery("#list2").jqGrid({ 
+  url:restPath+'/index.php?entity=search', 
+  datatype: "json",
+  multipleSearch: true,
+  subGridModel: [ 
+    {
+    name : [ 'datetime', 'queue', 'agent', 'event' ],
+    width: [100,100,100,100]
+    }
+  ],
+  subGrid:true,
+  subGridUrl:restPath+'/index.php?entity=call',
+  colNames:['Date','Clid','Queue', 'Agent', 'Event', 'Talk Time', 'Wait Time'], 
+  colModel:[ {name:'dateStart', index:'date_start', width:150, searchoptions:{dataInit:datePick, attr:{title:'Select Date'}, sopt:['eq','ne','lt','le','gt','ge']}}, 
+             {name:'callerid',index:'4', width:120}, 
+             {name:'queue_name',index:'8', width:120}, 
+             {name:'agent_name',index:'7', width:120}, 
+             {name:'event',index:'6', width:120},
+             {name:'talkTime',index:'11', width:90, align: 'right'},
+             {name:'combinedWaitTime',index:'12', width:90, align:'right'} 
+          ], 
+  rowNum:30,
+  altRows:true,
+  altclass:'alternate',
+  height: '100%', 
+  rowList:[30,60],
+  onSortCol: function (name,index,order) {
+     if(name == 'dateStart') {
+         $(this).jqGrid('setGridParam',{sortname: '5'});
+         $(this).trigger('reloadGrid');
+         return 'stop';
+     }
+  },
+  jsonReader : {
+      repeatitems: false,
+      id: "uniqueid",
+      root: "rows",
+      subgrid: {
+          root: "data", 
+          repeatitems: false
+      }
+  },
+  search: true,
+  pager: '#pager2', 
+  sortname: '5', 
+  viewrecords: true, 
+  sortorder: "desc", 
+  autowidth: true,
+  rownumbers: true,
+  subGridBeforeExpand: function(evt) {
+      console.log(evt);
+      var idx = evt.indexOf('_');
+      var uniid = evt.substr(idx+1,evt.length-idx);
+      tbl.jqGrid().setGridParam({ subGridUrl:restPath+'/index.php?entity=call/'+uniid});
+      return true;
+  },
+  loadBeforeSend: function(xhr)
+  {
+     xhr.setRequestHeader("Authorization",credentials);
+     return xhr;
+  }, 
+  caption:"Call Details" }); 
+jQuery("#list2").jqGrid('navGrid','#pager2',{edit:false,add:false,del:false},{},{},{},{multipleSearch: true}); 
+
+//jQuery("#list2").jqGrid('searchGrid', {multipleSearch:true}); 
+});
+</script> 
+</head>
+<body>
+<table id="list2"></table>
+<div id="pager2"></div> 
+
+</body>
+</html>

@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# chkconfig: 2345 99 15
+# description: Asteric Log Processing
+# processname: asterniclog 
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+DAEMON=/usr/local/parselog/asterniclog
+RETVAL=0
+
+[ -r /etc/sysconfig/asterniclog ] && . /etc/sysconfig/asterniclog
+
+case "$1" in
+  start)
+        if status $DAEMON > /dev/null; then
+             echo -n "$DAEMON: already running"
+             echo
+             exit
+        fi
+
+        PROGRAM1="asterisk"
+        APPCHK=$(ps ax | grep -v grep | grep -c $PROGRAM1 )
+        if [ $APPCHK = '0' ];
+        then
+            echo "Asterisk is not running. Deferring start.";
+            echo "service asterniclog start" | at now + 1 minute
+            exit
+        else
+            echo -n "Starting Asternic Log Processing Daemon: "
+            daemon $DAEMON $OPTIONS
+            RETVAL=$?
+            echo
+            [ $RETVAL -eq 0 ] && touch /var/lock/subsys/asterniclog
+        fi
+        ;;
+  stop)
+	echo -n "Shutting down Asternic Log Processing Daemon: "
+	killproc asterniclog
+	RETVAL=$?
+	echo
+	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/asterniclog
+	;;
+  restart)
+	$0 stop
+	$0 start
+	RETVAL=$?
+	;;
+  purge)
+        if status $DAEMON > /dev/null; then
+             echo -n "$DAEMON: already running"
+             echo 
+             $0 stop
+        fi
+        echo -n "Purging Asternic Log databases: "
+        daemon $DAEMON $OPTIONS --purge
+        RETVAL=$?
+        echo
+        [ $RETVAL -eq 0 ]
+        resp=1
+        while [ $resp -eq 1 ] ; do
+            echo -n $"Start service $0 (Y)es/(N)o? [Y] "
+            read answer
+            if strstr $"yY" "$answer" || [ "$answer" = "" ] ; then
+              resp=0
+              $0 start
+            elif strstr $"nN" "$answer" ; then
+              resp=0
+            fi
+        done
+
+        ;;
+  status)
+	status asterniclog 
+	RETVAL=$?
+	;;
+  *)
+	echo "Usage: asterniclog {start|stop|status|restart|reload|purge}"
+	exit 1
+esac
+
+exit $RETVAL
+

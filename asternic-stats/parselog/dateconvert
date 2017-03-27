@@ -1,0 +1,6 @@
+#!/bin/bash
+while read line
+do
+humandate=`echo $line | sed -r 's/([0-9]*)(.*)/@\1/g' | xargs date +'%Y-%m-%d %H:%M:%S' -d`
+echo  "$humandate $line"
+done

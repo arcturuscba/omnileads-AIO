@@ -1,0 +1,12 @@
+--- functions.inc.php.orig	2011-09-27 12:13:55.000000000 -0300
++++ functions.inc.php	2011-09-27 12:15:00.000000000 -0300
+@@ -401,7 +401,8 @@
+ 						$ext->add('ext-queues', $exten, '', new ext_setvar('__ALERT_INFO', str_replace(';', '\;', $alertinfo)));
+ 					}
+ 
+-					$ext->add('ext-queues', $exten, '', new ext_setvar('MONITOR_FILENAME','/var/spool/asterisk/monitor/q${EXTEN}-${STRFTIME(${EPOCH},,%Y%m%d-%H%M%S)}-${UNIQUEID}'));
++					$ext->add('ext-queues', $exten, '', new ext_setvar('__MONITOR_FILENAME','/var/spool/asterisk/monitor/q${EXTEN}-${STRFTIME(${EPOCH},,%Y%m%d-%H%M%S)}-${UNIQUEID}'));
++                                       $ext->add('ext-queues', $exten, '', new ext_setvar('__MONITOR_EXEC','/usr/local/parselog/update_mix_mixmonitor.pl ^{UNIQUEID} ^{MIXMONITOR_FILENAME}'));
+ 					if ($amp_conf['QUEUES_MIX_MONITOR']) {
+ 						$monitor_options = '';
+ 						if (isset($q['monitor_type']) && $q['monitor_type'] != '') {

@@ -1,0 +1,2 @@
+# /etc/default/fop2
+OPTIONS="-u qstatsUser -p qstatsPassw0rd -d qstats -h localhost -l /var/log/asterisk/queue_log -c --daemon"

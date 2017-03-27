@@ -1,0 +1,11 @@
+--- functions.inc.php.orig	2012-05-07 20:05:44.000000000 +0000
++++ functions.inc.php	2012-05-07 20:07:26.000000000 +0000
+@@ -2047,6 +2047,7 @@
+       $ext->add($context, $exten, '', new ext_noop_trace('Setting up recording: ${ARG1}, ${ARG2}, ${ARG3}'));
+       $ext->add($context, $exten, '', new ext_set('AUDIOHOOK_INHERIT(MixMonitor)','yes'));
+       $ext->add($context, $exten, '', new ext_set('MONITOR_FILENAME','${MIXMON_DIR}${YEAR}/${MONTH}/${DAY}/${CALLFILENAME}'));
++      $ext->add($context, $exten, '', new ext_setvar('__MONITOR_EXEC','/usr/local/parselog/update_mix_mixmonitor.pl ^{UNIQUEID} ^{MIXMONITOR_FILENAME}'));
+       $ext->add($context, $exten, '', new ext_set('__REC_STATUS','RECORDING'));
+       $ext->add($context, $exten, '', new ext_set('CDR(recordingfile)','${CALLFILENAME}.${MON_FMT}'));
+       $ext->add($context, $exten, '', new ext_return(''));
+

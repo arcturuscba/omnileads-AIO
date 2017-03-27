@@ -1,0 +1,15 @@
+If you want to use Asterisk log to database feature, you should create the 
+following views and drop the native qstats tables. In this case, tailqueuelog
+is not needed anymore, and you will inherit some of the asterisk bugs 
+regarding queue loging, namely add/remove/pause events that uses the device
+name instead of the agent name.
+
+CREATE  VIEW `qstats`.`qagent` AS select distinct `asterisk`.`queue_log`.`agent` AS `agent_id`,`asterisk`.`queue_log`.`agent` AS `agent` from `asterisk`.`queue_log`
+
+CREATE  VIEW `qstats`.`qevent` AS select distinct `asterisk`.`queue_log`.`event` AS `event_id`,`asterisk`.`queue_log`.`event` AS `event` from `asterisk`.`queue_log`
+
+CREATE  VIEW `qstats`.`qname` AS select distinct `asterisk`.`queue_log`.`queuename` AS `qname_id`,`asterisk`.`queue_log`.`queuename` AS `queue` from `asterisk`.`queue_log` 
+
+CREATE  VIEW `qstats`.`queue_stats_view` AS select `asterisk`.`queue_log`.`callid` AS `queue_stats_id`,`asterisk`.`queue_log`.`callid` AS `uniqueid`,cast(`asterisk`.`queue_log`.`time` as datetime) AS `datetime`,`asterisk`.`queue_log`.`queuename` AS `qname`,`asterisk`.`queue_log`.`agent` AS `qagent`,`asterisk`.`queue_log`.`event` AS `qevent`,`asterisk`.`queue_log`.`data1` AS `info1`,`asterisk`.`queue_log`.`data2` AS `info2`,`asterisk`.`queue_log`.`data3` AS `info3`,`asterisk`.`queue_log`.`data4` AS `info4`,`asterisk`.`queue_log`.`data5` AS `info5` from `asterisk`.`queue_log`
+
+

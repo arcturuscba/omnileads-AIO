@@ -1,0 +1,82 @@
+;; Dialplan for storing OUTBOUND campaing in queue_log
+;; Goto(queuedial,YYYXXXXXXXX,1) where YYY is the queue-campaign code
+;; and XXXXXXXX is the number to dial.
+;; The queuedial context has the outobound trunk hardcoded
+
+[queuedial]
+; this piece of dialplan is just a calling hook into the [qlog-queuedial] context that actually does the
+; outbound dialing - replace as needed - just fill in the same variables.
+exten => _XXX.,1,Set(QDIALER_QUEUE=q-${EXTEN:0:3})
+exten => _XXX.,n,Set(QDIALER_NUMBER=${EXTEN:3})
+exten => _XXX.,n,Set(QDIALER_AGENT=Agent/${CALLERID(num)})
+exten => _XXX.,n,Set(QDIALER_CHANNEL=ZAP/g0/${QDIALER_NUMBER})
+exten => _XXX.,n,Set(QueueName=${QDIALER_QUEUE})
+exten => _XXX.,n,MixMonitor(q-${QDIALER_QUEUE}-${UNIQUEID}.gsm,b,/usr/local/parselog/update_mix_mixmonitor.pl ${UNIQUEID} /var/spool/asterisk/monitor/q-${QDIALER_QUEUE}-${UNIQUEID}.gsm)
+exten => _XXX.,n,Goto(qlog-queuedial,${EXTEN:0:3},1)
+
+[qlog-queuedial]
+; We use a global variable to pass values back from the answer-detect macro.
+; STATUS = U unanswered
+;        = A answered    (plus CAUSECOMPLETE=C when callee hung up)
+; The 'g' dial parameter must be used in order to track callee disconnecting.
+; Note that we'll be using the 'h' hook in any case to do the logging when channels go down.
+;
+exten => _X.,1,NoOp,Outbound call -> A:${QDIALER_AGENT} N:${QDIALER_NUMBER} Q:${QDIALER_QUEUE} Ch:${QDIALER_CHANNEL}
+exten => _X.,n,Set(ST=${EPOCH})
+exten => _X.,n,Set(GM=QDV-${QDIALER_AGENT})
+exten => _X.,n,Set(GLOBAL(${GM})=U)
+exten => _X.,n,Set(GLOBAL(${GM}ans)=0)
+exten => _X.,n,Macro(queuelog,${ST},${UNIQUEID},${QDIALER_QUEUE},${QDIALER_AGENT},ENTERQUEUE,-,${QDIALER_NUMBER})
+exten => _X.,n,Dial(${QDIALER_CHANNEL},30,gM(queuedial-answer^${UNIQUEID}^${GM}^${QDIALER_QUEUE}^${QDIALER_AGENT}^${ST}))
+exten => _X.,n,Set(CAUSECOMPLETE=${IF($["${DIALSTATUS}" = "ANSWER"]?C)})
+
+; Trapping call termination here
+exten => h,1,NoOp( "Call exiting: status ${GLOBAL(${GM})} answered at: ${GLOBAL(${GM}ans)} DS: ${DIALSTATUS}"  )
+exten => h,n,Goto(case-${GLOBAL(${GM})})
+exten => h,n,Hangup()
+
+; Call unanswered
+exten => h,n(case-U),Set(WT=$[${EPOCH} - ${ST}])
+exten => h,n,Macro(queuelog,${EPOCH},${UNIQUEID},${QDIALER_QUEUE},${QDIALER_AGENT},ABANDON,1,1,${WT})
+exten => h,n,Hangup()
+
+; call answered: agent/callee hung
+exten => h,n(case-A),Set(COMPLETE=${IF($["${CAUSECOMPLETE}" = "C"]?COMPLETECALLER:COMPLETEAGENT)})
+exten => h,n,Set(WT=$[${GLOBAL(${GM}ans)} - ${ST}])
+exten => h,n,Set(CT=$[${EPOCH} - ${GLOBAL(${GM}ans)}])
+exten => h,n,Macro(queuelog,${EPOCH},${UNIQUEID},${QDIALER_QUEUE},${QDIALER_AGENT},${COMPLETE},${WT},${CT})
+exten => h,n,Hangup()
+
+
+[macro-queuedial-answer]
+; Expecting $ARG1: uniqueid of the caller channel
+;           $ARG2: global variable to store the answer results
+;           $ARG3: queue name
+;           $ARG4: agent name
+;           $ARG5: enterqueue
+;
+exten => s,1,NoOp("Macro: queuedial-answer UID:${ARG1} GR:${ARG2} Q:${ARG3} A:${ARG4} E:${ARG5}")
+exten => s,n,Set(NOW=${EPOCH})
+exten => s,n,Set(WD=$[${NOW} - ${ARG5}])
+exten => s,n,Macro(queuelog,${NOW},${ARG1},${ARG3},${ARG4},CONNECT,${WD})
+exten => s,n,Set(GLOBAL(${ARG2})=A)
+exten => s,n,Set(GLOBAL(${ARG2}ans)=${NOW})
+exten => s,n,NoOp("Macro queuedial-answer terminating" )
+
+[macro-queuelog]
+; The advantage of using this macro is that you can choose whether to use the Shell version
+; (where you have complete control of what gets written) or the Application version (where you
+; do not need a shellout, so it's way faster).
+;
+; Expecting  $ARG1: Timestamp
+;            $ARG2: Call-id
+;            $ARG3: Queue
+;            $ARG4: Agent
+;            $ARG5: Verb
+;            $ARG6: Param1
+;            $ARG7: Param2
+;            $ARG8: Param3
+;
+;exten => s,1,System( echo "${ARG1}|${ARG2}|${ARG3|${ARG4}|${ARG5}|${ARG6}|${ARG7}|${ARG8}" >> /var/log/asterisk/queue_log )
+exten => s,1,QueueLog(${ARG3},${ARG2},${ARG4},${ARG5},${ARG6}|${ARG7}|${ARG8})
+

@@ -1,0 +1,315 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Rest Sample</title>
+ 
+<link rel="stylesheet" type="text/css" media="screen" href="css/jquery-ui-1.8.5.custom.css" />
+<link rel="stylesheet" type="text/css" media="screen" href="css/ui.jqgrid.css" />
+ 
+<script src="js/jquery-1.4.2.min.js" type="text/javascript"></script>
+<script src="js/jquery-ui-1.8.5.custom.min.js" type="text/javascript"></script>
+<script src="js/i18n/grid.locale-en.js" type="text/javascript"></script>
+<script src="js/jquery.jqGrid.min.js" type="text/javascript"></script>
+<script src="js/jquery.base64.min.js" type="text/javascript"></script>
+<script src="js/sprintf.js" type="text/javascript"></script>
+<script>
+
+var credentials = make_base_auth('admin', 'admin');
+
+
+var loca = window.location+'';
+var locpart = loca.split('/');
+locpart.pop();
+locpart.pop();
+var restPath = locpart.join('/') + '/rest';
+
+
+function gridReload(){
+    var fecha_ini = jQuery("#fecha_ini").val();
+    var fecha_fin = jQuery("#fecha_fin").val();
+    jQuery("#list1").jqGrid('setGridParam',{url:restPath+"/reports/answered_calls_by_agent/?start="+fecha_ini+"&end="+fecha_fin,page:1}).trigger("reloadGrid");
+    jQuery("#list2").jqGrid('setGridParam',{url:restPath+"/reports/answered_calls_by_queue/?start="+fecha_ini+"&end="+fecha_fin,page:1}).trigger("reloadGrid");
+    jQuery("#list3").jqGrid('setGridParam',{url:restPath+"/reports/answered_calls_detail/?start="+fecha_ini+"&end="+fecha_fin,page:1}).trigger("reloadGrid");
+}
+
+function make_base_auth(user, pass) {
+    var tok = user + ':' + pass;
+    var hash = $.base64.encode(tok);
+    return "Basic " + hash;
+}
+
+jQuery(document).ready(function () {
+
+
+    var now = new Date();
+    var mes = now.getMonth();
+    mes++;
+    mes = sprintf("%02d",mes);
+
+    var hoy = now.getFullYear() + "-" + mes + "-" + now.getDate();
+
+    $( "#fecha_ini" ).val(hoy);
+    $( "#fecha_fin" ).val(hoy);
+
+    jQuery("#list1").jqGrid({
+        url: restPath + '/reports/answered_calls_by_agent/?start='+hoy+'&end='+hoy,
+        datatype: "json",
+        colNames: ['Agent', 'Calls', 'Total Time', 'Max Wait Time'],
+        colModel: [{
+            name: 'agent',
+            index: 'agent',
+            align: 'left',
+            width: 150
+        },
+        {
+            name: 'answeredCalls',
+            index: 'answeredCalls',
+            align: 'right',
+            width: 90
+        },
+        {
+            name: 'totalDuration',
+            index: 'totalDuration',
+            align: 'right',
+            width: 90
+        },
+        {
+            name: 'maxWaitTime',
+            index: 'maxWaitTime',
+            align: 'right',
+            width: 90,
+            sortable: false
+        }],
+        rowNum: 10,
+        rowList: [10, 20, 30],
+        height: 220,
+        jsonReader: {
+            repeatitems: false,
+            id: "agent",
+            root: function (obj) {
+                return obj.rows;
+            }
+        },
+        autowidth: true,
+        loadBeforeSend: function (xhr) {
+            xhr.setRequestHeader("Authorization", credentials);
+            return xhr;
+        },
+        pager: '#pager1',
+        sortname: 'agent',
+        viewrecords: true,
+        rownumbers: true,
+        sortorder: "asc",
+        caption: "Answered Calls by Agent"
+    });
+
+    jQuery("#list1").jqGrid('navGrid', '#pager1', {
+        edit: false,
+        add: false,
+        del: false
+    });
+
+    jQuery("#list2").jqGrid({
+        url: restPath + '/reports/answered_calls_by_queue/?start='+hoy+'&end='+hoy,
+        datatype: "json",
+        colNames: ['Queue', 'Calls', 'Percent'],
+        colModel: [{
+            name: 'queue',
+            index: 'queue',
+            align: 'left',
+            width: 150
+        },
+        {
+            name: 'callCount',
+            index: 'callCount',
+            align: 'right',
+            width: 90
+        },
+        {
+            name: 'percent',
+            index: 'percent',
+            align: 'right',
+            sortable: false,
+            width: 90
+        }
+        ],
+        rowNum: 10,
+        rowList: [10, 20, 30],
+        height: 220,
+        jsonReader: {
+            repeatitems: false,
+            id: "queue",
+            root: function (obj) {
+                return obj.rows;
+            }
+        },
+        autowidth: true,
+        loadBeforeSend: function (xhr) {
+            xhr.setRequestHeader("Authorization", credentials);
+            return xhr;
+        },
+        pager: '#pager2',
+        sortname: 'queue',
+        viewrecords: true,
+        rownumbers: true,
+        sortorder: "asc",
+        caption: "Answered Calls by Queue"
+    });
+
+    jQuery("#list2").jqGrid('navGrid', '#pager2', {
+        edit: false,
+        add: false,
+        del: false,
+    });
+
+    jQuery('#list2').jqGrid('navButtonAdd','#pager2',{caption:'',title:'Export to Excel',onClickButton : function(e)
+    {
+        try {
+            jQuery("#list2").jqGrid('excelExport',{url:'grid.php'});
+        } catch (e) {
+            window.location= 'grid.php?oper=excel';
+        }
+    }});
+
+    jQuery("#list3").jqGrid({
+        url: restPath + '/reports/answered_calls_detail/?start='+hoy+'&end='+hoy,
+        datatype: "json",
+        colNames: ['Date', 'Queue', 'Agent', 'Clid', 'Event', 'Call Time', 'Wait Time'],
+        colModel: [{
+            name: 'dateStart',
+            index: 'dateStart',
+            align: 'left',
+            summaryType: 'count', 
+            summaryTpl : '({0}) total',
+            search: true,
+            width: 150
+        },
+        {
+            name: 'queue',
+            index: 'queue',
+            align: 'right',
+            search: true,
+            stype: 'text',
+            width: 120
+        },
+        {
+            name: 'agent',
+            index: 'agent',
+            align: 'right',
+            search: true,
+            stype: 'text',
+            width: 120
+        },
+        {
+            name: 'callerid',
+            index: 'callerid',
+            align: 'right',
+            search: true,
+            stype: 'text',
+            width: 120
+        },
+        {
+            name: 'event',
+            index: 'event',
+            align: 'right',
+            width: 120
+        },
+        {
+            name: 'talkTime',
+            index: 'talkTime',
+            align: 'right',
+            summaryType: 'sum', 
+            width: 80
+        },
+        {
+            name: 'waitTime',
+            index: 'waitTime',
+            align: 'right',
+            summaryType: 'sum', 
+            width: 80
+        }
+        ],
+        height: 220,
+        rowNum: 500,
+        jsonReader: {
+            repeatitems: false,
+            id: "queue",
+            root: function (obj) {
+                return obj.rows;
+            }
+        },
+        autowidth: true,
+        loadBeforeSend: function (xhr) {
+            xhr.setRequestHeader("Authorization", credentials);
+            return xhr;
+        },
+        pager: '#pager3',
+        viewrecords: true,
+        caption: "Answered Calls Detail",
+        grouping: true, 
+        groupingView : { 
+            groupField : ['agent'], 
+            groupColumnShow : [true], 
+            groupText : ['<b>{0}</b>'], 
+            groupCollapse : true, 
+            groupOrder: ['asc'], 
+            groupSummary : [true],
+            showSummaryOnHide: true, 
+            groupDataSorted : true 
+        }, 
+        footerrow: true, 
+        userDataOnFooter: true 
+    });
+
+    jQuery("#list3").jqGrid('navGrid', '#pager3', {
+        edit: false,
+        add: false,
+        del: false
+    },{},{},{},{multipleSearch:true, multipleGroup:true});
+
+    jQuery("#chngroup").change(function(){ var vl = $(this).val(); if(vl) { if(vl == "clear") { jQuery("#list3").jqGrid('groupingRemove',true); } else { jQuery("#list3").jqGrid('groupingGroupBy',vl); } } }); 
+
+    $(function() {
+        $( "#fecha_ini" ).datepicker({ dateFormat: 'yy-mm-dd' });
+        $( "#fecha_fin" ).datepicker({ dateFormat: 'yy-mm-dd' });
+    });
+
+
+});
+</script> 
+</head>
+<body>
+
+<table class='ui-widget'>
+<tr>
+<td>
+<form>
+  <fieldset class='ui-jqgrid'>
+  <legend>Date Range</legend>
+    <label for="fecha_ini">Start Date:</label>
+    <input type="text" name="fecha_ini" id="fecha_ini" />
+    &nbsp;
+    <label for="fecha_fin">End Date:</label>
+    <input type="text" name="fecha_fin" id="fecha_fin" />
+    &nbsp;
+    <input type=submit onclick='gridReload(); return false;'>
+  </fieldset>
+</form>
+</td>
+</tr>
+</table>
+
+
+
+<table id="list1"></table>
+<div id="pager1"></div> 
+<br/>
+<table id="list2"></table>
+<div id="pager2"></div> 
+<br/>
+Group By: <select id="chngroup">  <option value="agent">Agent</option>  <option value="queue">Queue</option>  <option value="clear">Remove Grouping</option> </select> 
+<table id="list3"></table>
+<div id="pager3"></div> 
+</body>
+</html>

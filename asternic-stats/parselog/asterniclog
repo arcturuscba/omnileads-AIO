@@ -1,0 +1,963 @@
+#!/usr/bin/perl
+# Copyright 2008 House Internet S.R.L.
+# This program is not redistributable.
+# http://www.asternic.org
+# Contact Nicolas Gudino for more information <nicolas@house.com.ar>
+use FindBin;
+use lib $FindBin::Bin;
+use POSIX;
+use DBI;
+use Time::Local;
+use Getopt::Long qw(:config no_ignore_case);
+use Tail;
+
+my %config;
+my %event_hash = ();
+my %queuecache;
+my %agentcache;
+my %didhash;
+my $dbh;
+my $conectado     = 0;
+my $last_event_ts = 0;
+my $daemon        = 0;
+my $triggerscript = '';
+my $skip          = 0;
+my $convertlocal  = 0;
+my $reparse       = 0;
+my %nombreagente;
+my $pidfile = "/var/run/asterniclog.pid";
+my $logdir        = '';
+my $purge;
+my $repair;
+my $skiprepair = 0;
+
+$SIG{ALRM} = 'reconecta';
+$SIG{INT} =  'close';
+$SIG{TERM} = 'close';
+
+sub close
+{
+    if ( -f $pidfile ) {
+        unlink $pidfile;
+    }
+
+    print "Exiting...\n";
+
+    exit(0);
+}
+
+sub END {
+
+    open my $fh, "<", $pidfile or exit;
+    my $storedpid = <$fh>;
+    close $fh;
+
+    if($storedpid == $$) {
+        if(!$daemon) {
+            if(-f $pidfile) {
+                unlink $pidfile;
+            }
+            print "Exiting...!\n";
+        }
+    }
+}
+
+sub daemonize
+{
+    #fork and exit;
+    #POSIX::setsid();
+    #fork and exit;
+    #umask 0;
+    #chdir '/';
+
+    if ( $logdir ne "" ) {
+        open( STDOUT, q{>>}, "$logdir/asterniclog.log" ) or die "Can't open output log $logdir/asterniclog.log";
+        open( STDERR, q{>>}, "$logdir/asterniclog.log" ) or die "Can't open output log $logdir/asterniclog.log";
+    } 
+
+
+    defined( my $pid = fork ) or die "Can't Fork: $!";
+    exit if $pid;
+    setsid or die "Can't start a new session: $!";
+    open my $mypidfile, q{>}, $pidfile or die "Failed to open PID file $pidfile for writing.";
+    print $mypidfile $$;
+    close $mypidfile;
+
+    if ($logdir eq "") {
+        close STDOUT;
+        close STDERR;
+    }
+    close STDIN;
+}
+
+GetOptions(
+    "u|user=s"       => \$config{'dbuser'},
+    "p|password=s"   => \$config{'dbpass'},
+    "h|host=s"       => \$config{'dbhost'},
+    "d|dbname=s"     => \$config{'dbname'},
+    "l|logfile=s"    => \$config{'logfile'},
+    "c|convertlocal" => \$convertlocal,
+    "r|reparse"      => \$reparse,
+    "g|logdir=s"     => \$logdir,
+    "s|skip"         => \$skip,
+    "nr|norepair"    => \$skiprepair,
+    "daemon"         => \$daemon,
+    "P|pidfile=s"    => \$pidfile,
+    "help|?"         => \$help,
+    "purge"          => \$purge,
+    "repair"         => \$repair,
+    "t|trigger=s"    => \$triggerscript,
+    "w|write"        => \$write
+);
+
+usage() if $help;
+
+load_config('/etc/asterniclog.conf');
+load_config("$ENV{HOME}/.asterniclog") if defined $ENV{HOME};
+
+$config{'dbname'}  = $config{'dbname'}  ? $config{'dbname'}  : "qstats";
+$config{'dbhost'}  = $config{'dbhost'}  ? $config{'dbhost'}  : "localhost";
+$config{'dbpass'}  = $config{'dbpass'}  ? $config{'dbpass'}  : "";
+$config{'dbuser'}  = $config{'dbuser'}  ? $config{'dbuser'}  : "root";
+$config{'logfile'} = $config{'logfile'} ? $config{'logfile'} : "/var/log/asterisk/queue_log";
+
+if ( $purge && defined( $config{'dbuser'} ) ) {
+    print "Purge all data from tables.\n";
+    print "Are you sure? (yes|no)\n";
+    $answer = lc(<>);
+    chop($answer);
+    if ( $answer eq "y" || $answer eq "yes" ) {
+        &purgedb();
+    }
+    exit;
+}
+
+if ( $repair && defined ($config{'dbuser'} ) ) {
+    &repairdb();
+    exit;
+}
+
+if ( !-f $config{'logfile'} ) {
+    print "File " . $config{'logfile'} . " not found\n";
+    exit 1;
+}
+
+if ($write) {
+    if ( -d $ENV{HOME} ) {
+        open DEFAULT, ">$ENV{HOME}/.asterniclog";
+        print DEFAULT "dbuser=$config{'dbuser'}\n"   if $config{'dbuser'};
+        print DEFAULT "dbpass=$config{'dbpass'}\n"   if $config{'dbpass'};
+        print DEFAULT "dbhost=$config{'dbhost'}\n"   if $config{'dbhost'};
+        print DEFAULT "logfile=$config{'logfile'}\n" if $config{'logfile'};
+        close DEFAULT;
+    }
+}
+
+sub repairdb() {
+    print "Purging data\n";
+    my $return = connect_db();
+    if ($return) {
+        print "" . $DBI::errstr . "\n";
+        exit;
+    }
+    else {
+        $query = "REPAIR TABLE qevent";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "REPAIR TABLE queue_stats";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "REPAIR TABLE queue_stats_mv";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "REPAIR TABLE recordings";
+        $dbh->do($query);
+        print $query. "\n";
+        print "Done...\n";
+    }
+}
+ 
+sub purgedb() {
+    print "Purging data\n";
+    my $return = connect_db();
+    if ($return) {
+        print "" . $DBI::errstr . "\n";
+        exit;
+    }
+    else {
+        $query = "DELETE FROM qname";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "ALTER TABLE qname AUTO_INCREMENT = 1";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "INSERT INTO qname VALUES (-1,'ALL')";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "DELETE FROM qagent";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "ALTER TABLE qagent AUTO_INCREMENT = 1";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "INSERT INTO qagent VALUES (-1,'ALL')";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "DELETE FROM queue_stats";
+        $dbh->do($query);
+        print $query. "\n";
+        $query = "ALTER TABLE queue_stats AUTO_INCREMENT = 1";
+        $dbh->do($query);
+        $query = "TRUNCATE TABLE queue_stats_mv";
+        $dbh->do($query);
+        print $query. "\n";
+        print "Done...\n";
+    }
+}
+
+sub load_config() {
+    $file = shift;
+    return unless ( -r $file );
+    open( CFG, "<$file" ) or return;
+    while (<CFG>) {
+        chomp;
+        my ( $var, $val ) = split(/\s*\=\s*/);
+        $val =~ s/'([^']*)';/$1/g;
+        $var = lc($var);
+        $config{$var} = $val;
+    }
+    close(CFG);
+}
+
+sub reconecta() {
+    my $return = connect_db();
+
+    if ($return) {
+        print "" . $DBI::errstr . "\n";
+        alarm(5);
+    }
+    else {
+        print "Connected to MySQL!\n";
+        $conectado = 1;
+        open( LOSTEVENTS, "</var/log/asterisk/queue_log_failed" );
+        while (<LOSTEVENTS>) {
+            chomp;
+            print "Processing lost line: $_\n";
+            procesa($_);
+        }
+        close(LOSTEVENTS);
+        open( LOSTEVENTS, ">/var/log/asterisk/queue_log_failed" );
+        close(LOSTEVENTS);
+        print "Reseting /var/log/asterisk/queue_log_failed\n";
+        &set_events();
+    }
+}
+
+sub check_tables() {
+
+    print "Checking tables,indexes and triggers...\n";
+
+    my %create_table;
+
+    $create_table{'queue_stats_mv'} = "
+
+CREATE TABLE IF NOT EXISTS `queue_stats_mv` (
+  `id` int(11) unsigned NOT NULL auto_increment,
+  `datetime` timestamp NOT NULL default '0000-00-00 00:00:00' on update CURRENT_TIMESTAMP,
+  `datetimeconnect` timestamp NOT NULL default '0000-00-00 00:00:00',
+  `datetimeend` timestamp NOT NULL default '0000-00-00 00:00:00',
+  `queue` varchar(100) NOT NULL default '',
+  `agent` varchar(100) NOT NULL default '',
+  `event` varchar(40) NOT NULL default '',
+  `uniqueid` varchar(50) NOT NULL default '',
+  `clid` varchar(50) NOT NULL default '',
+  `url` varchar(100) NOT NULL default '',
+  `did` varchar(100) NOT NULL default '',
+  `position` int(6) unsigned NOT NULL default '1',
+  `info1` varchar(50) NOT NULL default '',
+  `info2` varchar(50) NOT NULL default '',
+  `info3` varchar(50) NOT NULL default '',
+  `info4` varchar(50) NOT NULL default '',
+  `info5` varchar(50) NOT NULL default '',
+  `overflow` int(6) unsigned NOT NULL default '1',
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `uni` (`uniqueid`),
+  KEY `fecha` (`datetime`),
+  KEY `ev` (`event`)
+);
+    ";
+
+$create_table{'trigger1'} = "DROP TRIGGER IF EXISTS queue_stats_ins";
+
+$create_table{'trigger'} = <<'END_TRIGGER';
+
+CREATE TRIGGER queue_stats_ins
+AFTER INSERT ON queue_stats
+FOR EACH ROW
+BEGIN
+
+SET @event_name = ''; SET @queue_name = ''; SET @agent_name = ''; SET @enterdate  = '';
+SET @connectdate= ''; SET @clid       = ''; SET @position   = ''; SET @url        = '';
+set @overflow   = ''; SET @firstenter = ''; SET @lastenter  = ''; SET @did        = '';
+
+SELECT event FROM qevent WHERE event_id = NEW.qevent INTO @event_name;
+SELECT agent FROM qagent WHERE agent_id = NEW.qagent INTO @agent_name;
+SELECT queue FROM qname  WHERE queue_id = NEW.qname  INTO @queue_name;
+
+IF @event_name LIKE 'COMPLETE%' THEN
+
+/*answered calls*/
+
+/* Elige el primer evento ENTERQUEUE, y si elijo el ultimo? (DESC) */
+SELECT datetime,info1,info2,info3,info5 FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE' 
+AND uniqueid=NEW.uniqueid ORDER BY datetime LIMIT 1 INTO @enterdate,@url,@clid,@position,@did;
+
+/* Elige el ultimo evento CONNECT */
+SELECT datetime FROM queue_stats JOIN qevent ON qevent=event_id 
+WHERE event='CONNECT' AND uniqueid=NEW.uniqueid ORDER BY datetime DESC LIMIT 1 INTO @connectdate;
+
+SELECT IF(count(uniqueid)>1,1,0) FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE'
+AND uniqueid=NEW.uniqueid INTO @overflow;
+
+
+/*
+SELECT COUNT(*),SUBSTRING_INDEX(GROUP_CONCAT(datetime),',',1),SUBSTRING_INDEX(GROUP_CONCAT(datetime),',',-1) 
+FROM queue_stats LEFT JOIN qevent ON qevent = qevent.event_id  WHERE uniqueid=NEW.uniqueid AND event='ENTERQUEUE' 
+INTO @overflow,@firstenter,@lastenter;
+*/
+
+REPLACE INTO queue_stats_mv (uniqueid,event,agent,queue,datetime,datetimeconnect,datetimeend,clid,position,url,did,overflow,info1,info2,info3,info4,info5) 
+VALUES (NEW.uniqueid,@event_name,@agent_name,@queue_name,@enterdate,@connectdate,NEW.datetime,@clid,IFNULL(NEW.info3,1),IFNULL(@url,''),IFNULL(@did,''),@overflow,IFNULL(NEW.info1,''),IFNULL(NEW.info2,''),IFNULL(NEW.info3,''),IFNULL(NEW.info4,''),IFNULL(NEW.info5,''));
+
+ELSEIF @event_name='TRANSFER' THEN
+
+/*transferred calls*/
+
+SELECT datetime,info1,info2,info3,info5 FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE' 
+AND uniqueid=NEW.uniqueid ORDER BY datetime LIMIT 1 INTO @enterdate,@url,@clid,@position,@did;
+
+SELECT datetime FROM queue_stats JOIN qevent ON qevent=event_id 
+WHERE event='CONNECT' AND uniqueid=NEW.uniqueid ORDER BY datetime DESC LIMIT 1 INTO @connectdate;
+
+SELECT count(*) FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE'
+AND uniqueid=NEW.uniqueid INTO @overflow;
+
+REPLACE INTO queue_stats_mv (uniqueid,event,agent,queue,datetime,datetimeconnect,datetimeend,clid,position,url,did,info1,info2,overflow,info3,info4,info5) 
+VALUES (NEW.uniqueid,@event_name,@agent_name,@queue_name,@enterdate,@connectdate,NEW.datetime,@clid,IFNULL(@position,1),IFNULL(@url,''),IFNULL(@did,''),IFNULL(NEW.info1,0),IFNULL(NEW.info2,0),@overflow,IFNULL(NEW.info3,''),IFNULL(NEW.info4,''),IFNULL(NEW.info5,''));
+
+ELSEIF @event_name LIKE '%ABANDON%' OR @event_name LIKE 'EXIT%' THEN
+
+/*unanswered calls*/
+
+SELECT datetime,info1,info2,info3,info5 FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE' 
+AND uniqueid=NEW.uniqueid ORDER BY datetime LIMIT 1 INTO @enterdate,@url,@clid,@position,@did;
+
+SELECT count(*) FROM queue_stats JOIN qevent ON qevent=event_id WHERE event='ENTERQUEUE'
+AND uniqueid=NEW.uniqueid INTO @overflow;
+
+SET @connectdate = @enterdate;
+
+REPLACE INTO queue_stats_mv (uniqueid,event,agent,queue,datetime,datetimeconnect,datetimeend,clid,position,url,did,info1,info2,overflow,info3,info4,info5) 
+VALUES (NEW.uniqueid,@event_name,@agent_name,@queue_name,@enterdate,@connectdate,NEW.datetime,IFNULL(@clid,''),IFNULL(@position,1),IFNULL(@url,''),IFNULL(@did,''),IFNULL(NEW.info1,0),IFNULL(NEW.info2,0),@overflow,IFNULL(NEW.info3,''),IFNULL(NEW.info4,''),IFNULL(NEW.info5,''));
+
+ELSEIF @event_name LIKE 'AGENT%' OR @event_name LIKE '%PAUSE%' OR @event_name LIKE '%MEMBER%' THEN 
+
+/* login, pausa, etc */
+
+INSERT INTO queue_stats_mv (uniqueid,event,agent,queue,datetime,datetimeconnect,datetimeend,info1,info2,info3,info4,info5) 
+VALUES (CONCAT_WS('.','x',UNIX_TIMESTAMP(NOW()),NEW.queue_stats_id),@event_name,@agent_name,@queue_name,NEW.datetime,NEW.datetime,NEW.datetime,IFNULL(NEW.info1,0),IFNULL(NEW.info2,0),IFNULL(NEW.info3,''),IFNULL(NEW.info4,''),IFNULL(NEW.info5,''));
+
+END IF;
+END;
+
+END_TRIGGER
+
+    foreach my $table (keys %create_table) {
+        $sth = $dbh->prepare($create_table{$table});
+        $sth->execute() or handle_error( $dbh->err(), $dbh->errstr(), $table );
+        $sth->finish;
+    }
+
+    # Update table structures if needed
+    my %alter_field;
+    $alter_field{'queue_stats_mv'}{'did'}='VARCHAR(50) AFTER url';
+    $alter_field{'queue_stats_mv'}{'info3'}='VARCHAR(100) AFTER info2';
+    $alter_field{'queue_stats_mv'}{'info4'}='VARCHAR(100) AFTER info3';
+    $alter_field{'queue_stats_mv'}{'info5'}='VARCHAR(100) AFTER info4';
+    $alter_field{'queue_stats'}{'info3'}='VARCHAR(100) AFTER info2';
+    $alter_field{'queue_stats'}{'info4'}='VARCHAR(100) AFTER info3';
+    $alter_field{'queue_stats'}{'info5'}='VARCHAR(100) AFTER info4';
+    $alter_field{'sched'}{'queues'}='TEXT';
+
+    foreach my $table (keys %alter_field) {
+        foreach my $field (keys %{$alter_field{$table}}) {
+            my $type = $alter_field{$table}{$field};
+            if(!check_table_field($table,$field)) {
+                $query = "ALTER TABLE $table ADD $field $type";
+                $sth = $dbh->prepare($query);
+                $sth->execute();
+                $sth->finish;
+            }
+        }
+    }
+
+    my %alter_field_default;
+    $alter_field_default{'queue_stats_mv'}{'datetime'}{'0000-00-00 00:00:00'}="datetime default '0000-00-00 00:00:00'";
+
+    foreach my $table (keys %alter_field_default) {
+        foreach my $field (keys %{$alter_field_default{$table}}) {
+            foreach my $default (keys %{$alter_field_default{$table}{$field}}) {
+                if(!check_table_field_default($table,$field,$default)) {
+                    $value = $alter_field_default{$table}{$field}{$default};
+                    $query = "ALTER TABLE $table CHANGE $field $field $value";
+                    print "$query\n";
+
+                    $sth = $dbh->prepare($query);
+                    $sth->execute();
+                    $sth->finish;
+                }
+            }
+        }
+    }
+
+    # Update table indexes if needed
+
+    my %check_index;
+
+    $check_index{'queue_stats_mv'}{'ev'}{'event'}="ALTER TABLE queue_stats_mv ADD INDEX ev (event)";
+    $check_index{'queue_stats_mv'}{'fecha'}{'datetime'}="ALTER TABLE queue_stats_mv ADD INDEX fecha (datetime)";
+    $check_index{'queue_stats_mv'}{'uni'}{'uniqueid'}="ALTER TABLE queue_stats_mv ADD INDEX uni (uniqueid)";
+
+    $check_index{'queue_stats'}{'unico'}{'uniqueid,datetime,qname,qagent,qevent'}="ALTER TABLE queue_stats ADD INDEX unico (uniqueid,datetime,qname,qagent,qevent)";
+    $check_index{'queue_stats'}{'ixevent'}{'qevent'} = "ALTER TABLE queue_stats ADD INDEX ixevent (qevent)";
+    $check_index{'queue_stats'}{'ixdate'}{'datetime'} = "ALTER TABLE queue_stats ADD INDEX ixdate (datetime)";
+    $check_index{'queue_stats'}{'ixuni'}{'uniqueid'} = "ALTER TABLE queue_stats ADD INDEX ixuni (uniqueid)";
+    $check_index{'queue_stats'}{'ixagent'}{'qagent'} = "ALTER TABLE queue_stats ADD INDEX ixagent (qagent)";
+    $check_index{'queue_stats'}{'combieventuni'}{'qevent,uniqueid'} = "ALTER TABLE queue_stats ADD INDEX combieventuni (qevent,uniqueid)";
+
+    #$check_index{'queue_stats'}{'combi'}{'uniqueid,datetime,queue_stats_id'} = "ALTER TABLE queue_stats ADD INDEX combi (uniqueid,datetime,queue_stats_id)";
+
+    foreach my $table (keys %check_index) {
+        foreach my $idx (keys %{$check_index{$table}}) {
+            foreach my $fields (keys %{$check_index{$table}{$idx}}) {
+                my $ret = check_table_index($table,$idx,$fields);
+                if($ret>0) {
+                     print "Index $idx for table $table needs to be recreated...\n";
+                     my $query = "ALTER TABLE $table DROP INDEX $idx";
+                     $sth = $dbh->prepare($query);
+                     $sth->execute();
+                     $sth->finish;
+                     $query = $check_index{$table}{$idx}{$fields};
+                     $sth = $dbh->prepare($query);
+                     $sth->execute();
+                     $sth->finish;
+                }
+            }
+        }
+    }
+ 
+}
+
+sub check_table_index() {
+    my $table  = shift;
+    my $index  = shift;
+    my $flds   = shift;
+
+    my $devuelvo = 0;
+    my @fldsarray = split(/,/,$flds);        
+
+    $sth = $dbh->prepare("SHOW INDEX FROM $table");
+    $sth->execute();
+    my @fields_for_index;
+    while ( my @inparray = $sth->fetchrow_array() ) {
+        my $idxname = $inparray[2];
+        my $idxfield = $inparray[4];
+        if($index eq $idxname) {
+            push @fields_for_index,$idxfield;
+        }
+    }
+    my %fields = map { $_ => 1 } @fields_for_index;
+    foreach my $ele (@fldsarray) {
+        if(!defined($fields{$ele})) {
+            print "Missing field $ele on index $index for table $table!\n";
+            $devuelvo++;
+        }
+    }
+    $sth->finish;
+
+     return $devuelvo;
+
+}
+
+sub check_table_field() {
+
+    my $table  = shift;
+    my $field  = shift;
+    my $exists = 0;
+
+    $sth = $dbh->prepare("SHOW COLUMNS FROM $table");
+    $sth->execute();
+
+    while ( my @inparray = $sth->fetchrow_array() ) {
+        if($inparray[0] eq $field) {
+            $exists=1;
+        }
+    }
+    $sth->finish;
+
+    return $exists;
+}
+
+sub check_table_field_default() {
+
+    my $table    = shift;
+    my $field    = shift;
+    my $default  = shift;
+    my $exists = 0;
+
+    $sth = $dbh->prepare("SHOW COLUMNS FROM $table");
+    $sth->execute();
+
+    while ( my @inparray = $sth->fetchrow_array() ) {
+        if($inparray[0] eq $field && $inparray[4] eq $default) {
+            $exists=1;
+        }
+    }
+    $sth->finish;
+    return $exists;
+
+}
+
+
+sub initial_load() {
+    open( EVENTS, "<$config{'logfile'}" );
+    while (<EVENTS>) {
+        chomp;
+        procesa($_);
+    }
+    close(EVENTS);
+}
+
+sub connect_db() {
+    my $return = 0;
+    my %attr   = (
+        mysql_enable_utf8 => 1,
+        PrintError => 0,
+        RaiseError => 0,
+    );
+    my $dsn = "DBI:mysql:database=$config{'dbname'};host=$config{'dbhost'}";
+    print "Connecting to DB $dsn\n";
+    $dbh->disconnect if $dbh;
+    $dbh = DBI->connect( $dsn, $config{'dbuser'}, $config{'dbpass'}, \%attr ) or $return = 1;
+    return $return;
+}
+
+sub check_queue {
+
+    $queue_name = shift;
+
+    if ( !defined($queue_name) ) {
+        return 0;
+    }
+
+    if ( exists( $queuecache{$queue_name} ) ) {
+        return $queuecache{$queue_name};
+    }
+
+    if ( $conectado == 1 ) {
+        $sth = $dbh->prepare("SELECT queue_id FROM qname WHERE queue=?");
+        $sth->execute($queue_name);
+        my @result  = $sth->fetchrow_array;
+        my $cuantos = @result;
+        $sth->finish;
+
+        if ($cuantos) {
+            $queue_id = $result[0];
+        }
+        else {
+            $sth = $dbh->prepare("INSERT INTO qname (queue) VALUES (?)");
+            $sth->execute($queue_name);
+            $queue_id = $dbh->{q{mysql_insertid}};
+        }
+        $queuecache{$queue_name} = $queue_id;
+        return $queue_id;
+    }
+}
+
+sub set_agent_names { 
+    print "Setting agent names via asterisk database show\n";
+    %nombreagente = ();
+    open(PS,"/usr/sbin/asterisk -rx 'database show ampuser' | ") || warn "Failed: $!\n";
+    while ( <PS> ) {
+        chop;
+        if ( /cidname/) {
+            my ($numpart,$nom) = split(/: /);
+            my (undef,undef,$num) = split(/\//,$numpart);
+            my $canlage = "Local/$num\@from-queue/n";
+            $nom =~ s/\s+$//g;
+            $nombreagente{$canlage} = $nom;
+        }
+    }
+    close(PS);
+}
+
+sub check_event {
+    $event = shift;
+
+    if ( !defined($event) ) {
+        return 0;
+    }
+
+    if ( exists( $event_hash{$event} ) ) {
+        $event_id = $event_hash{$event};
+    }
+    else {
+
+        # Try harder to find the event
+        print "No existe el evento $event, pruebo de nuevo\n";
+        &set_events();
+
+        if ( exists( $event_hash{$event} ) ) {
+            print "Por suerte lo encontro\n";
+            $event_id = $event_hash{$event};
+        }
+        else {
+            $sth = $dbh->prepare("INSERT INTO qevent (event) VALUES (?)");
+            $sth->execute($event);
+            $event_id = $dbh->{q{mysql_insertid}};
+            $event_hash{$event} = $event_id;
+        }
+    }
+    return $event_id;
+}
+
+sub check_agent {
+
+    $agent_name = shift;
+
+    if ( !defined($agent_name) ) {
+        return 0;
+    }
+
+    $agent_name =~ s/\s+$//;
+    $agent_name =~ s/^\s+//;
+
+    if ( $agent_name =~ /^Local/ ) {
+        $agent_name =~ s/^Local\///g;
+        @partes = split( /\@/, $agent_name, 2 );
+        $agent_name = $partes[0];
+        if(defined($nombreagente{"Local/$agent_name\@from-queue/n"})) {  
+            $agent_name = $nombreagente{"Local/$agent_name\@from-queue/n"};
+        }
+    }
+
+    if ( $agent_name =~ /^\d+$/ ) {
+        $agent_name = "Agent/" . $agent_name;
+    }
+
+    if ( exists( $agentcache{$agent_name} ) ) {
+        #print "Check Agent: agent $agent_name exists in cache = " . $agentcache{$agent_name} . "\n";
+        return $agentcache{$agent_name};
+    }
+
+    #print "Check Agent: agent $agent_name is not in cache, query database\n";
+
+    $sth = $dbh->prepare("SELECT agent_id FROM qagent WHERE agent=?");
+    $sth->execute($agent_name);
+    my @result  = $sth->fetchrow_array;
+    my $cuantos = @result;
+    $sth->finish;
+
+    if ($cuantos) {
+        $agent_id = $result[0];
+        #print "Check Agent: Agent $agent_name found on database with id $agent_id\n";
+    }
+    else {
+        $sth = $dbh->prepare("INSERT INTO qagent (agent) VALUES (?)");
+        $sth->execute($agent_name);
+        $agent_id = $dbh->{q{mysql_insertid}};
+        #print "Check Agent: NOT found on database inserting $agent_id\n";
+        #print "Check Agent: $query\n";
+    }
+    if ( !$dbh->err() ) {
+        #print "Check Agent: Adding agent $agent_name to cache with id $agent_id\n";
+        $agentcache{$agent_name} = $agent_id;
+    }
+    else {
+        #print "Check Agent: Error doing database check, unable to set agent $agentname in cache.\n";
+        $agent_id = -1;
+    }
+    return $agent_id;
+}
+
+sub return_timestamp {
+    my $date_string = shift;
+    my ( $year, $month, $day, $hour, $min, $sec ) = split( /[-: ]/, $date_string, 6 );
+    $year = $year - 1900;
+    $month--;
+    my $u_timestamp = timelocal( $sec, $min, $hour, $day, $month, $year );
+    return $u_timestamp;
+}
+
+sub set_events {
+    if ( $DBI::err ne "2002" ) {
+
+        %event_hash = ();
+
+        # Populates an array with the EVENTS ids
+        $query = "SELECT * FROM qevent ORDER BY event_id";
+        $sth   = $dbh->prepare($query);
+        $sth->execute;
+        while ( my @row = $sth->fetchrow ) {
+            $event_hash{ $row[1] } = $row[0];
+        }
+
+        %queuecache = ();
+        %agentcache = ();
+    }
+}
+
+sub handle_error {
+    $error       = shift;
+    $errorstring = shift;
+    $linea       = shift;
+    if ( $error == "2006" ) {
+        print "Lost connection... save $linea\n";
+        if ( open( LOG, ">> /var/log/asterisk/queue_log_failed" ) ) {
+            print LOG "$linea\n";
+            close(LOG);
+        }
+        &reconecta();
+    }
+    else {
+        print "Record not inserted, error: $errorstring\n";
+    }
+}
+
+sub last_event {
+
+    return if $reparse;
+    # Select the most recent event saved
+    $query = "SELECT datetime FROM queue_stats ORDER BY datetime DESC LIMIT 1";
+    $sth   = $dbh->prepare($query);
+    $sth->execute;
+    my @result  = $sth->fetchrow_array;
+    my $cuantos = @result;
+    $sth->finish;
+
+    if ( $cuantos > 0 ) {
+        print "last $result[0]\n";
+        $last_event_ts = return_timestamp( $result[0] );
+        print "last $last_event_ts\n";
+        $last_event_ts -= 10;
+    }
+    else {
+        $last_event_ts = 0;
+    }
+}
+
+sub procesa {
+
+    my $max_infos = 5;
+    my $linea = shift;
+
+    print $linea. "\n";
+
+    my ( @parametros) = split( /\|/, $linea );
+
+    if ($#parametros < 4 ) {
+        print "Invalid line! There are fields missing. Skip!\n";
+        return;
+    }
+
+    my $date       = shift(@parametros);
+    my $uniqueid   = shift(@parametros);
+    my $queue_name = shift(@parametros);
+    my $agent      = shift(@parametros);
+    my $event      = shift(@parametros);
+
+    if ( $date !~ /^[0-9]/) {
+        print "Invalid Timestamp ($date)! There are fields missing. Skip!\n";
+        return;
+    }
+
+    my $infoqr = "";
+    my $repqr  = "";
+    my $cuantos_infos = $#parametros + 1;
+
+    if($cuantos_infos > $max_infos) {
+        my $sacar_infos = $cuantos_infos - $max_infos;
+        for($a=1;$a<=$sacar_infos;$a++) {
+            pop @parametros;
+        }
+        $cuantos_infos = $max_infos;
+    }
+
+    for($a=1;$a<=$cuantos_infos;$a++) {
+       $infoqr.=",info$a";
+       $repqr.=",?";
+    }
+
+    if ( $date < $last_event_ts ) {
+        return;
+    }
+
+    if ( $event eq "UPDATEFIELD" ) {
+
+        # Update ENTERQUEUE field based on custom UPDATEFIELD queue_log event for Tag Calls and similar
+        my ($value,$field) = split(/~/,$parametros[0]);
+        $sth = $dbh->prepare(qq{
+            UPDATE queue_stats JOIN qevent ON qevent=event_id SET $field = ? WHERE uniqueid = ? AND event='ENTERQUEUE'
+        });
+        $sth->execute($value, $uniqueid) or handle_error( $dbh->err(), $dbh->errstr(), $linea );
+
+        $sth = $dbh->prepare(qq{
+            UPDATE queue_stats_mv SET $field = ? WHERE uniqueid = ?
+        });
+        $sth->execute($value, $uniqueid) or handle_error( $dbh->err(), $dbh->errstr(), $linea );
+
+    } elsif ( $event eq "BLINDTRANSFER" || $event eq "ATTENDEDTRANSFER" ) {
+        $event = 'TRANSFER';
+
+    } elsif ( $event eq "DID") {
+
+        # Update ENTERQUEUE with DID information for FreePBX >2.10
+        $didhash{$uniqueid}=$parametros[0];
+
+    } elsif ( $event eq "ENTERQUEUE" ) {
+
+        # If we had a previous DID event, replicate info1 field into enterqueue for Asternic URL
+        if(defined($didhash{$uniqueid})) {
+            my $cuantos = $#parametros;
+            my $fillgap = 2 - $cuantos;
+
+            # If the ENTERQUEUE event lacks info1, info2 and info3, we fill them up
+            if($fillgap>0) {
+                for(my $a=0;$a<$fillgap;$a++) {
+                    my $indextofill = $a + 2;
+                    my $indextofield = $a + 3;
+                    $parametros[$indextofill]='';
+                    $infoqr.=",info$indextofield";
+                    $repqr.=",?";
+                }
+            }
+            
+            $parametros[3] = $didhash{$uniqueid};
+
+            $extra = "UPDATE queue_stats_mv SET did='".$didhash{$uniqueid}."' WHERE uniqueid='$uniqueid'";
+
+            delete $didhash{$uniqueid};
+            $infoqr.=",info4";
+            $repqr.=",?";
+
+        }
+
+
+    } elsif ( $event eq "RINGNOANSWER" ) {
+
+        # Skip insertion of RINGNOANSWER events with 0 seconds duration
+        if ( $parametros[0] eq "0" ) {
+            return;
+        }
+    } elsif ( $event eq "CONFIGRELOAD" ) {
+       
+        # Set agent names on FreePBX if convertlocal is set
+        &set_agent_names() if $convertlocal;
+    }
+
+    if ( $skip == 1 ) {
+        if ( $agent =~ /^SIP/i || $agent =~ /^IAX/i) {
+            return;
+        }
+    }
+
+    if($triggerscript ne '') {
+        system("$triggerscript $date '$queue_name' '$agent' '$event' $uniqueid </dev/null >/dev/null 2>&1 &");
+    }
+
+
+    my @timeData = localtime($date);
+    my $sec      = $timeData[0];
+    my $min      = $timeData[1];
+    my $hour     = $timeData[2];
+    my $day      = $timeData[3];
+    my $month    = $timeData[4] + 1;
+    my $year     = $timeData[5] + 1900;
+
+    $date = "$year-$month-$day $hour:$min:$sec";
+
+    $queue_id = check_queue($queue_name);
+    $agent_id = check_agent($agent);
+    $event_id = check_event($event);
+
+    if($queue_name ne "" & $agent ne "") {
+        $sth = $dbh->prepare(qq{
+            INSERT INTO queue_stats (uniqueid, datetime, qname, qagent, qevent$infoqr) VALUES (?,?,?,?,?$repqr);
+        });
+        $sth->execute($uniqueid, $date, $queue_id, $agent_id, $event_id, @parametros) or handle_error( $dbh->err(), $dbh->errstr(), $linea );
+    }
+
+    if($extra ne '') {
+        $sth = $dbh->prepare(qq{
+             $extra
+        });
+        $sth->execute() or handle_error( $dbh->err(), $dbh->errstr(), $linea );
+    }
+}
+
+# STARTING
+
+# Check if its running
+if(-f $pidfile && !$reparse) {
+    print "Already running! Aborting...\n";
+    exit;
+}
+
+if($daemon) {
+    &daemonize();
+} else {
+    # write pid when not daemonized too
+    open my $mypidfile, q{>}, $pidfile or die "Failed to open PID file $pidfile for writing.";
+    print $mypidfile $$;
+    close $mypidfile;
+}
+
+&reconecta();
+&last_event();
+&set_agent_names() if $convertlocal;
+&check_tables();
+&repairdb() if !$skiprepair;
+&initial_load();
+
+if($reparse && !$daemon) {
+   exit;
+
+} else {
+
+    $file = File::Tail->new( name=>$config{'logfile'}, maxinterval=>5 );
+
+    while ( defined( $message = $file->read ) ) {
+        next unless defined $message;
+        chomp $message;
+        procesa($message);
+    }
+}
+
+sub usage {
+    print STDERR "asternicloglog [<options>] \n";
+    print STDERR "       -u <name>     - Connect to mysql as username <name> [root]\n";
+    print STDERR "       -p <pw>       - Connect to mysql with password <pw>\n";
+    print STDERR "       -h <host>     - Connect to mysql host <host> [localhost]\n";
+    print STDERR "       -d <dbname>   - Connect to mysql database <dbname> [qstats]\n";
+    print STDERR "       -l <queuelog> - Path and name for queue_log [/var/log/asterisk/queue_log]\n";
+    print STDERR "       -c            - Convert Local/xxx\@from-queue/n to agent name in FreePBX\n";
+    print STDERR "       -r            - Reparse the full log with no date check\n";
+    print STDERR "       -s            - Skip events with SIP/IAX in queue member\n";
+    print STDERR "       -g            - Specify a log directory to write debug messages when daemonized\n";
+    print STDERR "       -nr           - Skip table repair at startup\n";
+    print STDERR "       --daemon      - Daemonize process and detach from console\n";
+    print STDERR "       -w            - Write configuration to disk\n";
+    print STDERR "       --purge       - Purge all data from tables and exit\n";
+    print STDERR "       --repair      - Repair tables and exit\n";
+    exit;
+}

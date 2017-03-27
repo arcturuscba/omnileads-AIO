@@ -1,0 +1,5 @@
+Version 1.9.2
+
+date:        Fri Mar 09 12:03:13 2012 -0300
+summary:     Add sla_steps setup parameter to define number of steps in sla and abandon rate reports
+

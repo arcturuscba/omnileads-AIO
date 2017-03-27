@@ -1,0 +1,654 @@
+html {
+min-width:600px;
+width:100%;
+}
+
+body {
+background:#9cc;
+color:#333;
+font-family:verdana,sans-serif;
+font-size:11px;
+margin:0;
+overflow-x:hidden;
+}
+
+div,caption,td,th,h2,h3,h4 {
+color:inherit;
+font-family:verdana,sans-serif;
+font-size:11px;
+voice-family:inherit;
+}
+
+.clearhack {
+display:inline;
+}
+
+.clear {
+clear:both;
+}
+
+a {
+color:#06C;
+}
+
+a:active {
+color:#000;
+}
+
+p {
+line-height:140%;
+}
+
+h1,h2 {
+color:#333;
+font-family:trebuchet ms;
+font-weight:700;
+}
+
+h1 {
+font-size:180%;
+margin:0;
+}
+
+h1 a {
+color:#333;
+text-decoration:none;
+}
+
+h1 a:hover {
+border-bottom:1px dotted #666;
+color:#000;
+}
+
+h2 {
+border-bottom:1px solid #CCC;
+font-size:140%;
+padding-bottom:2px;
+padding-top:5px;
+margin-top:0.5em;
+}
+
+p.note {
+background:#EEE;
+font-family:tahoma;
+font-size:85%;
+line-height:130%;
+margin-top:0;
+padding:4px;
+}
+
+.icon {
+height:16px;
+_margin-bottom:12px;
+_margin-top:12px;
+padding:0;
+width:16px;
+vertical-align:baseline;
+}
+
+.helpleft,.helpright {
+_display:inline-block;
+}
+
+.left {
+float:left;
+width:45%;
+}
+
+.right {
+float:right;
+width:45%;
+}
+
+.alignright {
+float:right;
+text-align:right;
+}
+
+.alignleft {
+float:left;
+margin-right: 10px;
+margin-left: 10px;
+}
+.aligncenter {
+margin:auto;
+text-align:center;
+}
+
+.noborder {
+border: 0;
+}
+
+h4 {
+margin:0 0 10px 0;
+padding:0;
+}
+
+h4.msg {
+color:#fff;
+}
+
+.rounded {
+position:relative;
+}
+
+.rounded .tl {
+background:url(../images/corners/wTopLeft.gif) top left no-repeat;
+display:block;
+height:2px;
+left:0;
+position:absolute;
+top:0;
+width:2px;
+}
+
+.rounded .tr {
+background:url(../images/corners/wTopRight.gif) top right no-repeat;
+display:block;
+height:2px;
+position:absolute;
+right:0;
+top:0;
+width:2px;
+}
+
+.rounded .bl {
+background:url(../images/corners/wBottomLeft.gif) bottom left no-repeat;
+bottom:0;
+display:block;
+height:2px;
+left:0;
+position:absolute;
+width:2px;
+}
+
+.rounded .br {
+background:url(../images/corners/wBottomRight.gif) bottom right no-repeat;
+bottom:0;
+display:block;
+height:2px;
+position:absolute;
+right:0;
+width:2px;
+}
+
+.blue {
+color:#00f;
+}
+
+.red {
+color:red;
+}
+
+#instructions ul ul {
+font-weight:400;
+list-style:none;
+margin-bottom:10px;
+}
+
+#loader {
+background-color:#90a0c0;
+left:50%;
+top:50%;
+padding:5px;
+position:fixed;
+width:200px;
+height:50px;
+margin-top:-18px;
+margin-left:-100px;
+display:none;
+border-radius: 6px;
+-moz-border-radius: 6px;
+-webkit-border-radius: 6px;
+}
+
+.grey {
+color:#999;
+}
+
+a:hover,h4.msg2 {
+color:#333;
+}
+
+#rest,// *html .rounded {
+width:100%;
+}
+
+.message_error img,.message_success img,.message_warning img {
+display:inline;
+left:2px;
+margin-right:10px;
+position:relative;
+top:1px;
+}
+
+.message_error .rounded,.message_success .rounded,.message_warning .rounded {
+padding:10px 10px 9px;
+}
+
+.strong,#instructions ul {
+font-weight:700;
+}
+
+.marked {
+background:#FF0;
+color:#F00;
+}
+
+.selectHome {
+height: 100px;
+width: 190px;
+}
+
+.nomargin {
+margin:0px;
+}
+
+.cssABANDON {
+color:#CC0000;
+}
+
+.cssTRANSFER {
+color:#6699FF;
+}
+
+.cssEXITWITHTIMEOUT, .cssEXITWITHKEY, .cssEXITEMPTY {
+color:#DD4400;
+}
+
+.cssCOMPLETECALLER, .cssCOMPLETEAGENT {
+color:#669900;
+}
+
+.cssRINGNOANSWER {
+color:#C71585;
+}
+
+.cssENTERQUEUE {
+color:#DAA520;
+}
+
+
+.playicon {
+_background:url("../images/control_play_blue.gif");
+background-repeat: no-repeat;
+width: 16px;
+height: 16px;
+_margin-top: 2px;
+}
+
+.pauseicon {
+_background:url("../images/control_pause_blue.png");
+background-repeat: no-repeat;
+width: 16px;
+height: 16px;
+_margin-top: 2px;
+}
+
+.playicon:before {
+font-family: FontAwesome;
+content: "\f01d";
+font-size:1.33em;
+}
+
+.pauseicon:before {
+font-family: FontAwesome;
+content: "\f28c";
+font-size:1.33em;
+}
+
+span.stars, span.stars span {
+    display: block;
+    background: url(../images/stars.png) 0 -16px repeat-x;
+    width: 80px;
+    height: 16px;
+}
+
+span.stars span {
+    background-position: 0 0;
+}
+
+table.report tbody tr.free, table.report tbody td.free, .free {
+background: #0F0;
+}
+
+.row-fluid {
+page-break-after: always;
+page-break-inside: avoid;
+}
+
+.nav-pills > li {
+    background-color: #FFF3B3;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.pagination-centered {
+	text-align:center;
+	width:100%;
+	
+}
+
+.pagination ul {
+    display: inline-block;
+    margin-bottom: 0;
+    margin-left: 0;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+    -webkit-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    -moz-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.pagination li {
+	display:inline;
+}
+
+.pagination li:first-child a {
+    border-left-width: 1px;
+    -webkit-border-radius: 3px 0 0 3px;
+    -moz-border-radius: 3px 0 0 3px;
+    border-radius: 3px 0 0 3px;
+}
+.pagination .disabled span, .pagination .disabled a, .pagination .disabled a:hover {
+    color: #999999;
+    cursor: default;
+    background-color: transparent;
+}
+.pagination a {
+    float: left;
+    padding: 0 12px;
+    line-height: 34px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    border-left-width: 0;
+}
+
+.pagination a:hover, .pagination .active a {
+    background-color: #FFFDB3;
+    border: 1px solid #ddd;
+    color: #000;
+}
+.nav-pills > li.active > a, .nav-pills > li.active > a:hover, .nav-pills > li.active > a:focus {
+border-bottom-right-radius:0px;
+border-bottom-left-radius:0px;
+color: #000;
+background-color: #FFFDF3;
+}
+
+label {
+line-height:1.5em;
+font-weight: 100;
+font-size:120%;
+}
+
+.nav {
+background-color: #9cc;
+}
+
+#dbgrid_search_x {
+    position: absolute;
+    right: 5px;
+    top: 0;
+    bottom: 0;
+    height: 14px;
+    margin: auto;
+    font-size: 14px;
+    cursor: pointer;
+    color: #ccc;
+}
+
+.table-bordered > thead > tr > th,
+.table-bordered > tbody > tr > th,
+.table-bordered > tfoot > tr > th,
+.table-bordered > thead > tr > td,
+.table-bordered > tbody > tr > td,
+.table-bordered > tfoot > tr > td {
+  border: 1px solid #ddd;
+}
+
+.control-label {
+height: 34px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 7px;
+}
+
+.dropdown-menu>li>a {
+    display: block;
+    padding: 3px 20px;
+    clear: both;
+    font-weight: 400;
+    font-size:0.8em;
+    color: #000;
+    white-space: nowrap;
+}
+
+
+
+
+
+
+
+
+
+/*
+ *    add this to your own css file,
+ *    to overwrite the _chosen_ styling, to look more like bootstrap!
+ *    
+ *    note: for the error part to work, an .error class-name must be added
+ *    to a wrapping DIV, to display the bootstrap error styling. I have
+ *    just use the wrapping .control-group DIV
+ *    
+ *    credit: Rasmus Burkal, @rabu81
+ *            Drew Miller, @mewdriller
+*/
+ul.chzn-choices {
+    -webkit-transition: border linear 0.2s, box-shadow linear 0.2s;
+    -moz-transition: border linear 0.2s, box-shadow linear 0.2s;
+    -ms-transition: border linear 0.2s, box-shadow linear 0.2s;
+    -o-transition: border linear 0.2s, box-shadow linear 0.2s;
+    transition: border linear 0.2s, box-shadow linear 0.2s;
+}
+
+div.error div.controls div.chzn-container ul.chzn-choices {
+    border-color: #B94A48;
+}
+
+div.error div.controls div.chzn-container-active  ul.chzn-choices {
+    -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(185, 74, 72, 0.6);
+    -moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(185, 74, 72, 0.6);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(185, 74, 72, 0.6);
+}
+
+div.controls ul.chzn-choices {
+    border-color: #ccc;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+}
+
+div.chzn-container-active  ul.chzn-choices {
+    border-color: rgba(82, 168, 236, 0.8);
+    -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+    -moz-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+    border-radius:3px;
+}
+
+div.chzn-container a.chzn-single {
+    font-size: 14px;
+    line-height: 24px;
+    height: 34px;
+    padding-top: 4px;
+}
+
+div.chzn-container a.chzn-single div b {
+    background-position: 0 2px;
+}
+
+div.chzn-container-active a.chzn-single-with-drop div b {
+    background-position: -18px 3px;
+}
+
+.chzn-container-multi .chzn-choices {
+height: 2.5em !important;
+border-radius: 2px;
+}
+
+div.chzn-container-single div.chzn-search input {
+    border: 1px solid #aaa;
+    font-size: 13px;
+    line-height: normal;
+    height: auto;
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+    border-radius: 0;
+    -webkit-transition: none;
+    -moz-transition: none;
+    -ms-transition: none;
+    -o-transition: none;
+    transition: none;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    box-shadow: none;
+}
+
+div.chzn-container {
+    margin-bottom: 10px;
+}
+
+div.chzn-container-multi {
+    margin-bottom: 5px;
+}
+
+div.chzn-container-multi ul.chzn-choices li.search-choice {
+    font-size: 14px;
+    line-height: 14px;
+}
+
+.chz50 {
+ width:50px !important;
+}
+
+
+.chz100 {
+ width:100px !important;
+}
+
+
+.chz200 {
+ width:200px;
+}
+
+.chz300 {
+ width:300px;
+}
+
+.chz400 {
+ width:400px;
+}
+
+.dt-buttons {float:left; margin-right:15px;}
+
+th > input {
+font-weight:100;
+font-size: 12px !important;
+}
+
+td a:hover {
+text-decoration:none;
+}
+
+table tfoot .pagination { font-weight:100; }
+
+.w95 {
+    width:95%;
+    margin-left:auto;
+    margin-right:auto;
+}
+
+.cd-top.cd-is-visible {
+  /* the button becomes visible */
+  visibility: visible;
+  opacity: 1;
+}
+.cd-top.cd-fade-out {
+  /* if the user keeps scrolling down, the button is out of focus and becomes less visible */
+  opacity: .5;
+}
+
+.cd-top {
+  display: inline-block;
+  height: 40px;
+  width: 40px;
+  position: fixed;
+  bottom: 40px;
+  right: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  /* image replacement properties */
+  overflow: hidden;
+  text-indent: 100%;
+  white-space: nowrap;
+  background: rgba(232, 98, 86, 0.8) url(../images/cd-top-arrow.svg) no-repeat center 50%;
+  visibility: hidden;
+  opacity: 0;
+  -webkit-transition: opacity .3s 0s, visibility 0s .3s;
+  -moz-transition: opacity .3s 0s, visibility 0s .3s;
+  transition: opacity .3s 0s, visibility 0s .3s;
+}
+.cd-top.cd-is-visible, .cd-top.cd-fade-out, .no-touch .cd-top:hover {
+  -webkit-transition: opacity .3s 0s, visibility 0s 0s;
+  -moz-transition: opacity .3s 0s, visibility 0s 0s;
+  transition: opacity .3s 0s, visibility 0s 0s;
+}
+.cd-top.cd-is-visible {
+  /* the button becomes visible */
+  visibility: visible;
+  opacity: 1;
+}
+.cd-top.cd-fade-out {
+  /* if the user keeps scrolling down, the button is out of focus and becomes less visible */
+  opacity: .5;
+}
+.no-touch .cd-top:hover {
+  background-color: #e86256;
+  opacity: 1;
+}
+@media only screen and (min-width: 768px) {
+  .cd-top {
+    right: 20px;
+    bottom: 20px;
+  }
+}
+@media only screen and (min-width: 1024px) {
+  .cd-top {
+    height: 60px;
+    width: 60px;
+    right: 30px;
+    bottom: 30px;
+  }
+}
+.pace {
+  -webkit-pointer-events: none;
+  pointer-events: none;
+
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.pace-inactive {
+  display: none;
+}
+
+.pace .pace-progress {
+  background: #29d;
+  position: fixed;
+  z-index: 2000;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  height: 2px;
+}
