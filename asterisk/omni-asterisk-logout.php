@@ -1,14 +1,14 @@
-#!/usr/bin/env php
+#!/usr/bin/php -q
 
 <?php
-
 
 $BASE_PATH="/var/lib/asterisk/agi-bin/";
 
 require $BASE_PATH."phpagi.php";
 require_once $BASE_PATH."phpagi-asmanager.php";
 
-$agiWrapper = new AGI($BASE_PATH."include/phpagi/phpagi.conf");
+
+//$agiWrapper = new AGI($BASE_PATH."include/phpagi/phpagi.conf");
 $astman = new AGI_AsteriskManager();
 
 $ampmgruser  = "wombat";
@@ -43,7 +43,7 @@ foreach($listado as $valor)
                                 'Hangup',
                                 NULL
                                 );
+      echo "pepe \n"; 
     	}
-
 
 ?>
