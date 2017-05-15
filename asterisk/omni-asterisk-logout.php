@@ -20,6 +20,12 @@ $oResultado = $astman->connect("localhost", $ampmgruser, $ampmgrpass);
                                 
 $listado = shell_exec("/usr/sbin/asterisk  -rx 'queue show' |grep Unava |awk '{print $1, $2}' FS='(' |awk '{print $1, $2}' FS='SIP' |awk '{print $1, $2}' FS='/' |awk '{print $1, $2}' FS='from'");
 
+if (empty($listado)) {
+    echo '$var es o bien 0, vacía, o no se encuentra definida en absoluto';
+}
+
+else 
+{
 $listado = explode("\n",$listado);
 //$listado = explode(" ",$listado);
 
@@ -45,5 +51,6 @@ foreach($listado as $valor)
                                 );
       echo "pepe \n"; 
     	}
+}
 
 ?>
