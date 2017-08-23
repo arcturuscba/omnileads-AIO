@@ -18,7 +18,7 @@ $oResultado = $astman->connect("localhost", $ampmgruser, $ampmgrpass);
         if($oResultado == FALSE)
                 echo "Connection failed.\n";
                                 
-$listado = shell_exec("/usr/sbin/asterisk  -rx 'queue show' |grep Unava |awk '{print $1, $2}' FS='(' |awk '{print $1, $2}' FS='SIP' |awk '{print $1, $2}' FS='/' |awk '{print $1, $2}' FS='from'");
+$listado = shell_exec("/usr/sbin/asterisk  -rx 'queue show' |grep Unava |awk '{print $1, $2}' FS='(' |awk '{print $1, $2}' FS='SIP' |awk '{print $1, $2}' FS='/' |awk '{print $1, $2}' FS=')'");
 
 if (empty($listado)) {
     echo '$var es o bien 0, vacía, o no se encuentra definida en absoluto';
@@ -31,11 +31,12 @@ $listado = explode("\n",$listado);
 
 foreach($listado as $valor)
 		{
+		echo "valor: $valor\n";
 		$salida = explode ("    ", $valor);
 		$nombre = trim($salida[1]," ");
 		$numero = trim($salida[2]," ");
-		echo $nombre."\n";
-		echo $numero."\n";
+		echo "nobre: $nombre \n";
+		echo "numero-sip: $numero \n";
 		
 		$aResponse = $astman->Originate(
 							    'Local/066LOGOUT@fts-pausas/n',
